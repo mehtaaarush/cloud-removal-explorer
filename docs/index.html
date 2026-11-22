@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cloud removal explorer: a generative model on held-out satellite images</title>
+  <meta name="description" content="Compare cloudy RICE satellite images with the output of my uncertainty-aware generative cloud removal model, see where it was unsure, and browse all 247 held-out test images with their PSNR and SSIM.">
+  <meta name="author" content="Aarush Mehta">
+  <meta name="theme-color" content="#0b1124">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230b1124'/%3E%3Cpath d='M16 4v24' stroke='%2393cdf0' stroke-width='2'/%3E%3Crect x='5' y='8' width='22' height='16' fill='none' stroke='%23eef2fb' stroke-width='1.5'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mona+Sans:wdth,wght@100,400;100,500;125,300&display=swap">
+  <link rel="stylesheet" href="assets/app.css">
+  <script src="assets/app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the explorer</a>
+
+<header class="bar">
+  <div class="container bar-inner">
+    <a class="wordmark" href="#main" aria-label="Cloud removal explorer, top of the page">Cloud removal explorer</a>
+    <nav aria-label="Page">
+      <ul class="links">
+        <li><a href="#compare">Compare</a></li>
+        <li><a href="#test-set">Test set</a></li>
+        <li><a href="#model">Model</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="container">
+  <section class="head" aria-labelledby="title">
+    <h1 id="title">See the ground under the cloud</h1>
+    <p class="lead">My major project’s model on satellite images it never saw in training. Drag across a scene to compare, then ask where the model was unsure.</p>
+  </section>
+
+  <section class="bench" id="compare" aria-label="Compare a scene">
+    <div class="cases">
+      <h2 class="label-head" id="h-cases">Nine held-out scenes</h2>
+      <ul class="case-list" id="case-list" role="listbox" aria-labelledby="h-cases"></ul>
+    </div>
+
+    <div class="stage-col">
+      <div class="seg" role="tablist" aria-label="What sits on the right of the divider">
+        <button type="button" role="tab" data-view="output" aria-selected="true">Model output</button>
+        <button type="button" role="tab" data-view="truth" aria-selected="false">Ground truth</button>
+        <button type="button" role="tab" data-view="unc" aria-selected="false">Uncertainty</button>
+        <button type="button" role="tab" data-view="err" aria-selected="false">Error against truth</button>
+      </div>
+      <figure class="stage" id="stage">
+        <div class="stage-inner" id="stage-inner">
+          <canvas id="left" width="512" height="512" aria-hidden="true"></canvas>
+          <canvas id="right" width="512" height="512" aria-hidden="true"></canvas>
+          <div class="divider" id="divider" aria-hidden="true"><span></span></div>
+          <p class="stage-state" id="stage-state">Loading the scene</p>
+        </div>
+        <input class="range-split" id="split" type="range" min="0" max="100" value="50" aria-label="Divider position: cloudy input on the left, the chosen view on the right">
+        <figcaption><span>Cloudy input</span><span id="right-label">Model output</span></figcaption>
+      </figure>
+      <div class="flag">
+        <label for="flag">Mark the least certain pixels</label>
+        <input type="range" id="flag" min="0" max="30" value="0" step="1" aria-describedby="flag-value">
+        <output id="flag-value" for="flag">off</output>
+      </div>
+    </div>
+
+    <dl class="readout" id="readout" aria-live="polite">
+      <div class="big"><dt>PSNR, output against truth</dt><dd><span class="fig" id="r-psnr">0</span><span class="u">dB</span></dd></div>
+      <div><dt>PSNR of the cloudy input</dt><dd id="r-psnr-in">0</dd></div>
+      <div><dt>SSIM, input then output</dt><dd id="r-ssim">0</dd></div>
+      <div><dt>Cloud cover, from the mask</dt><dd id="r-cloud">0</dd></div>
+      <div><dt>Uncertainty against error, this browser</dt><dd id="r-corr">computing</dd></div>
+    </dl>
+  </section>
+
+  <section class="block" id="test-set" aria-labelledby="h-test">
+    <div class="block-head">
+      <h2 id="h-test">Every test image, before and after</h2>
+      <p class="deck" id="d-test">Each point is one held-out image: the PSNR of the cloudy input across, the model’s output up. Points above the line improved.</p>
+    </div>
+    <div class="scatter-grid">
+      <div class="scatter" id="scatter" role="img" aria-label="Output PSNR against input PSNR for all 247 test images"></div>
+      <aside class="peek" id="peek" aria-live="polite">
+        <p class="muted">Select a point to see that image’s output and uncertainty map.</p>
+      </aside>
+    </div>
+    <div class="table-wrap">
+      <table class="register">
+        <caption class="visually-hidden">Test set results by dataset</caption>
+        <thead><tr><th scope="col">Dataset</th><th scope="col" class="n">Images</th><th scope="col" class="n">PSNR in</th><th scope="col" class="n">PSNR out</th><th scope="col" class="n">SSIM in</th><th scope="col" class="n">SSIM out</th><th scope="col" class="n">GPU time</th></tr></thead>
+        <tbody id="t-summary"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="block model" id="model" aria-labelledby="h-model">
+    <div class="block-head">
+      <h2 id="h-model">The model</h2>
+      <p class="deck">A Fourier, uncertainty-aware generative network, trained on RICE1 for haze and thin cloud and on RICE2 for thick cloud and shadow.</p>
+    </div>
+    <ol class="parts">
+      <li><h3>Global branch</h3><p>A SwinIR transformer with Fourier Units, so every patch sees the whole image’s frequency content and long-range structure.</p></li>
+      <li><h3>Local branch</h3><p>A TransGAN generator for fine texture: field edges, roads and roofs.</p></li>
+      <li><h3>Wavelet fusion</h3><p>The two branches are merged band by band in a wavelet decomposition, low frequencies from one, detail from the other.</p></li>
+      <li><h3>Uncertainty head</h3><p>Predicts the expected error at each pixel with a Laplace likelihood. That map weights the adversarial loss, so the model invents content only where the ground is hidden.</p></li>
+    </ol>
+    <p class="note">Every number and image here comes from the model’s own test run, saved in the project repository: a fixed, seeded 80/20 split of RICE, predictions and uncertainty maps per image, and per-image PSNR and SSIM. The weights were trained on a GPU cluster and are not served from this page, so it shows recorded outputs rather than running the network. The uncertainty maps were saved scaled to each image, so the marking above ranks pixels within a scene, not across scenes.</p>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="container foot-inner">
+    <p>Aarush Mehta, B.Tech major project, UPES Dehradun, 2026. Imagery from the RICE dataset.</p>
+    <ul>
+      <li><a href="https://aarushmehta.vercel.app">Portfolio</a></li>
+      <li><a href="https://github.com/mehtaaarush/cloud-removal-explorer">Source code</a></li>
+      <li><a href="https://github.com/BUPTLdy/RICE_DATASET">RICE dataset</a></li>
+    </ul>
+  </div>
+</footer>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+<noscript><p class="container">This explorer draws the images in the browser, so it needs JavaScript.</p></noscript>
+</body>
+</html>
